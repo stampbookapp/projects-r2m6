@@ -889,6 +889,9 @@ button.li:hover{background:none}
 .bdots i.task{background:var(--coral)}.bdots i.pdue,.legend i.pdue{background:var(--bad)}
 .eyebrow{font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--muted)}
 .wrap.wide,#view.wide{max-width:1240px}
+.tabbar.scroll{justify-content:flex-start;overflow-x:auto;scrollbar-width:none;-webkit-mask:linear-gradient(90deg,#000 88%,transparent);mask:linear-gradient(90deg,#000 88%,transparent)}
+.tabbar.scroll::-webkit-scrollbar{display:none}
+.tabbar.scroll button{flex:none;min-width:66px}
 </style>
 
 <div class="app">
@@ -932,7 +935,7 @@ const KEYWORDS={
   stays:['hotel','hostel','airbnb','villa','ryokan','resort','guesthouse'],
   flights:['flight','airline','baggage','luggage','seat']
 };
-const NAV=BUDGET?[['today','Today'],['month','Month'],['bills','Bills'],['goals','Goals'],['more','More']]:PROJ?[['today','Today'],['dash','Dashboard'],['board','Board'],['money','Money'],['more','More']]:[['today','Today','◉'],['trips','Trips','✈'],['money','Money','◈'],['month','Calendar','▦'],['more','More','☰']];
+const NAV=BUDGET?[['today','Today'],['month','Month'],['bills','Bills'],['spending','Spending'],['goals','Goals'],['debt','Debt'],['more','More']]:PROJ?[['today','Today'],['dash','Dashboard'],['board','Board'],['timeline','Timeline'],['pcal','Calendar'],['projects','Projects'],['clients','Clients'],['money','Money'],['more','More']]:[['today','Today','◉'],['trips','Trips','✈'],['money','Money','◈'],['month','Calendar','▦'],['map','Map'],['memories','Memories'],['more','More','☰']];
 const HELP={
   setaside:'What to move into savings each month so the trip is paid for before you go: the budget, minus what you have set aside and bookings already paid, split over the months left.',
   safe:"What is left for this trip: the budget, minus bookings and everything spent so far.",
@@ -1308,12 +1311,18 @@ const V={tab:'today',trip:null,showHow:{},spendCat:'food',undo:null,confirm:null
 
 /* ---------- render shell ---------- */
 function renderNav(){
-  const map={trip:'trips',map:'more',year:'more',settings:'more',cats:'more',memories:'more',spending:'more',income:'more',debt:'more',milestones:'more',dump:'more',timeline:'more',matrix:'more',pcal:'more',projects:'more',clients:'more',project:'board'}, cur=map[V.tab]||V.tab;
+  const map={trip:'trips',map:'more',year:'more',settings:'more',cats:'more',memories:'more',spending:'more',income:'more',debt:'more',milestones:'more',dump:'more',timeline:'more',matrix:'more',pcal:'more',projects:'more',clients:'more',project:'board'};
+  // in Projects these four live in the main menu, and a project page belongs to Projects
+  if(PROJ) Object.assign(map,{timeline:'timeline',pcal:'pcal',projects:'projects',clients:'clients',project:'projects'});
+  const cur=NAV.some(n=>n[0]===V.tab)?V.tab:(map[V.tab]||V.tab);
   const items=NAV.filter(n=>n[0]!=='money'||moneyOn());
   const btn=([k,n])=>`<button data-go="${k}" ${cur===k?'aria-current="page"':''}><span class="ic">${icon(NAVICON[k]||'dots')}</span>${n}</button>`;
   const st=document.getElementById('sidetrip'); if(st){const t=nextTrip(); st.innerHTML=t?`<button class="sidetrip" data-open="${t.id}">${icon('plane')}<span class="grow"><b>${esc(t.name)}</b><small>${t.start?fmtRange(t.start,t.end):'No dates yet'}</small></span></button>`:''}
   document.getElementById('nav').innerHTML=items.map(btn).join('');
-  document.getElementById('tabbar').innerHTML=items.map(btn).join('');
+  const tb=document.getElementById('tabbar'); tb.innerHTML=items.map(btn).join('');
+  // more items than fit on a phone: the bar scrolls sideways and keeps the current screen in view
+  tb.classList.toggle('scroll',items.length>5);
+  const on=tb.querySelector('[aria-current]'); if(on&&items.length>5) tb.scrollLeft=on.offsetLeft-(tb.clientWidth-on.offsetWidth)/2;
 }
 function banner(){
   if(BUDGET) return budgetBanner();
@@ -1946,7 +1955,7 @@ function photoStrip(t,max){
 function viewMemories(){
   const list=S.trips.filter(t=>{const mm=t.memory||{}; return (mm.photos||[]).length||mm.highlight||mm.best}).sort((a,b)=>(b.start||'').localeCompare(a.start||''));
   const nPh=list.reduce((a,t)=>a+((t.memory||{}).photos||[]).length,0);
-  let out=`<div><button class="back" data-go="more">← More</button></div>`+banner()+`<div class="top"><div><h1>Memories</h1><div class="sub">${nPh} photo${nPh===1?'':'s'} from ${list.length} trip${list.length===1?'':'s'}</div></div></div>`;
+  let out=banner()+`<div class="top"><div><h1>Memories</h1><div class="sub">${nPh} photo${nPh===1?'':'s'} from ${list.length} trip${list.length===1?'':'s'}</div></div></div>`;
   if(!list.length){
     const cand=S.trips.filter(t=>['going','ended','done'].includes(effStatus(t)));
     return out+`<div class="card"><p>Add photos and a few lines to a trip, and they will all be kept here.</p>${cand.length?`<div class="list">${cand.map(t=>`<button class="li" data-open="${t.id}"><span class="grow"><b>${esc(t.name)}</b><span>${fmtRange(t.start,t.end)}</span></span><span class="linkbtn">Add photos</span></button>`).join('')}</div>`:''}</div>`;
@@ -2100,7 +2109,7 @@ function viewMap(){
     return `<path class="cty ${s} ${V.selCountry===cc?'sel':''}" data-cc="${cc}" d="${v[3]}"><title>${esc(v[0])}${s&&s!=='home'?' · '+({been:'been',plan:'planned',wish:'want to go'}[s]):''}</title></path>`}).join('');
   const pins=S.places.map(p=>{const [x,y]=proj(p.lon,p.lat); const s=placeStatus(p);
     return `<circle class="pin ${s} ${V.selPlace===p.id?'sel':''}" data-pin="${p.id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(4.2*k).toFixed(2)}" stroke-width="${(1.5*k).toFixed(2)}"><title>${esc(p.name)}</title></circle>`}).join('');
-  let out=banner()+`<div><button class="back" data-go="more">← More</button></div><div class="top"><div><h1>Your map</h1><div class="sub num">${st.been.length} countr${st.been.length===1?'y':'ies'} · ${st.cities} cit${st.cities===1?'y':'ies'} · ${st.pct.toFixed(1)}% of the world · ${st.conts} continent${st.conts===1?'':'s'}</div></div>
+  let out=banner()+`<div class="top"><div><h1>Your map</h1><div class="sub num">${st.been.length} countr${st.been.length===1?'y':'ies'} · ${st.cities} cit${st.cities===1?'y':'ies'} · ${st.pct.toFixed(1)}% of the world · ${st.conts} continent${st.conts===1?'':'s'}</div></div>
     <button class="btn ${V.dropPin?'coral':'ghost'}" data-act="drop-pin">${V.dropPin?'Tap the map…':'Drop a pin'}</button></div>`;
   out+=`<div class="chips" role="group" aria-label="Zoom to region">${REGIONS.map(r=>`<button type="button" data-act="region" data-r="${r[0]}" aria-pressed="${reg[0]===r[0]}">${r[0]}</button>`).join('')}</div>`;
   out+=`<div class="mapwrap ${V.dropPin?'dropping':''}" id="mapwrap"><svg id="worldsvg" viewBox="${vb.map(n=>n.toFixed(1)).join(' ')}" role="img" aria-label="World map of places you have been, planned and want to visit"><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" style="fill:var(--sea)"/>${paths}<g>${pins}</g></svg>
@@ -2626,7 +2635,7 @@ function deriveStatus(t){
   return S.bookings.some(b=>b.trip===t.id&&b.paid&&(b.cat==='flights'||b.cat==='stays'))?'booked':'plan';
 }
 function viewMore(){
-  const items=[['memories','Memories','Photos and notes from every trip','◍'],['map','Map','Countries and cities you have been to','◍'],['year','Year in travel','Your trips, countries and money for the year','▲'],['cats','Categories','Add your own kinds of spending and income','◧'],['settings','Settings','Name, currency, colour and backups','⚙']];
+  const items=[['year','Year in travel','Your trips, countries and money for the year','▲'],['cats','Categories','Add your own kinds of spending and income','◧'],['settings','Settings','Name, currency, colour and backups','⚙']];
   return banner()+`<div class="top"><div><h1>More</h1></div></div><div class="morelist">${items.map(([k,n,d,i])=>`<button class="morecard" data-go="${k}"><span class="mi" aria-hidden="true">${icon(MOREICON[k]||'dots')}</span><span class="grow"><b>${n}</b><span>${d}</span></span><span class="muted" aria-hidden="true">›</span></button>`).join('')}</div>`;
 }
 function heroCard(t){
@@ -2929,7 +2938,7 @@ const ICONS={
   camera:'<rect x="3.5" y="7" width="17" height="12" rx="3" class="f"/><path d="M8.5 7l1.3-2.2h4.4L15.5 7"/><circle cx="12" cy="13" r="3.2"/>'
 };
 function icon(name,cls){return `<svg class="ico ${cls||''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]||ICONS.dots}</svg>`}
-const NAVICON={today:'sun',trips:'suitcase',money:'wallet',month:'calendar',more:'more',bills:'receipt',goals:'coins'};
+const NAVICON={today:'sun',trips:'suitcase',money:'wallet',month:'calendar',more:'more',bills:'receipt',goals:'coins',spending:'chart',debt:'card',map:'globe',memories:'camera'};
 const MOREICON={map:'globe',memories:'camera',year:'star',cats:'tag',settings:'sliders',spending:'chart',income:'arrowin',debt:'card',milestones:'star',dump:'clipboard'};
 const TABICON={overview:'home',plan:'clipboard',money:'wallet',pack:'suitcase'};
 const EVI={trip:'plane',in:'arrowin',bill:'receipt',pay:'ticket',plan:'clipboard',spent:'wallet'};
@@ -4229,7 +4238,7 @@ function viewIncome(){
 }
 function viewDebt(){
   const list=debtOrder(), done=S.debts.filter(d=>debtLeft(d)<=0), total=list.reduce((a,d)=>a+debtLeft(d),0), free=debtFree(), by=S.settings.debtOrder||'rate';
-  let out=`<div><button class="back" data-go="more">← More</button></div>`+budgetBanner()+`<div class="top"><div><h1>Debt</h1><div class="sub">${list.length?`${H(total)} to go${free?free.months===Infinity?' · raise a payment to see a debt-free date':` · debt-free by <b style="color:var(--ink)">${MON[+free.date.slice(5,7)-1]} ${free.date.slice(0,4)}</b>`:''}`:'No debts'}</div></div><button class="btn coral" data-act="debt-new">+ Debt</button></div>`;
+  let out=budgetBanner()+`<div class="top"><div><h1>Debt</h1><div class="sub">${list.length?`${H(total)} to go${free?free.months===Infinity?' · raise a payment to see a debt-free date':` · debt-free by <b style="color:var(--ink)">${MON[+free.date.slice(5,7)-1]} ${free.date.slice(0,4)}</b>`:''}`:'No debts'}</div></div><button class="btn coral" data-act="debt-new">+ Debt</button></div>`;
   if(list.length>1) out+=`<div class="seg wide" role="group" aria-label="Pay off order"><button type="button" data-act="debt-order" data-k="rate" aria-pressed="${by==='rate'}">Highest rate first</button><button type="button" data-act="debt-order" data-k="small" aria-pressed="${by==='small'}">Smallest first</button></div>`;
   list.forEach((d,i)=>{const left=debtLeft(d), pct=(+d.balance||0)?Math.min(100,(1-left/(+d.balance||1))*100):0;
     out+=`<div class="card debt"><div class="row-between"><b>${i===0?'① ':''}${esc(d.name)}</b><span class="pill ${(+d.rate||0)>=15?'s-ended':(+d.rate||0)>0?'s-plan':'s-going'}">${(+d.rate||0)}%</span></div>
@@ -4266,8 +4275,8 @@ function viewDump(){
     ${done.length?`<details class="card"><summary>Cleared · ${done.length}</summary><div class="list">${done.map(x=>`<div class="li"><span class="grow" style="text-decoration:line-through;color:var(--muted)">${esc(x.text)}</span><button class="linkbtn" data-act="dump-undo" data-id="${x.id}">Bring back</button></div>`).join('')}</div></details>`:''}`;
 }
 function viewMoreB(){
-  const items=[['spending','Spending','Where the money went, with charts'],['income','Money in','Paychecks and other money'],['debt','Debt','What you owe and when it ends'],['milestones','Milestones','Wins that quietly add up'],['dump','Brain dump','Thoughts with no numbers'],['cats','Categories','Your own kinds of spending'],['settings','Settings','Balance, currency, look and backups']];
-  return budgetBanner()+`<div class="top"><div><h1>More</h1></div></div><div class="morelist">${items.filter(i=>S.settings.extras!==false||!['debt','milestones','income'].includes(i[0])).map(([k,n,d])=>`<button class="morecard" data-go="${k}"><span class="mi" aria-hidden="true">${icon(MOREICON[k]||'dots')}</span><span class="grow"><b>${n}</b><span>${d}</span></span><span class="muted" aria-hidden="true">›</span></button>`).join('')}</div>`;
+  const items=[['income','Money in','Paychecks and other money'],['milestones','Milestones','Wins that quietly add up'],['dump','Brain dump','Thoughts with no numbers'],['cats','Categories','Your own kinds of spending'],['settings','Settings','Balance, currency, look and backups']];
+  return budgetBanner()+`<div class="top"><div><h1>More</h1></div></div><div class="morelist">${items.filter(i=>S.settings.extras!==false||!['milestones','income'].includes(i[0])).map(([k,n,d])=>`<button class="morecard" data-go="${k}"><span class="mi" aria-hidden="true">${icon(MOREICON[k]||'dots')}</span><span class="grow"><b>${n}</b><span>${d}</span></span><span class="muted" aria-hidden="true">›</span></button>`).join('')}</div>`;
 }
 
 /* the month planner, with stamp tabs */
@@ -4492,7 +4501,7 @@ function viewSpending(){
   const ym=V.mMonth, mm=monthMoney(ym), [y,mo]=ym.split('-').map(Number);
   const prev=mo===1?`${y-1}-12`:`${y}-${pad(mo-1)}`, next=mo===12?`${y+1}-01`:`${y}-${pad(mo+1)}`;
   const list=S.tx.filter(x=>x.type==='out'&&x.date.slice(0,7)===ym).sort((a,b)=>b.date.localeCompare(a.date)), show=V.showAll?list:list.slice(0,25);
-  let out=`<div><button class="back" data-go="more">← More</button></div>`+budgetBanner()+`<div class="top"><div><h1>Spending</h1><div class="sub">${MONTHF[mo-1]} ${y} · ${H(list.reduce((a,x)=>a+(+x.amount||0),0))} out</div></div><div class="row-end"><button class="btn ghost small" data-act="m-month" data-m="${prev}" aria-label="Previous month">‹</button>${ym!==T.slice(0,7)?`<button class="btn ghost small" data-act="m-month" data-m="${T.slice(0,7)}">Now</button>`:''}<button class="btn ghost small" data-act="m-month" data-m="${next}" aria-label="Next month">›</button></div></div>`;
+  let out=budgetBanner()+`<div class="top"><div><h1>Spending</h1><div class="sub">${MONTHF[mo-1]} ${y} · ${H(list.reduce((a,x)=>a+(+x.amount||0),0))} out</div></div><div class="row-end"><button class="btn ghost small" data-act="m-month" data-m="${prev}" aria-label="Previous month">‹</button>${ym!==T.slice(0,7)?`<button class="btn ghost small" data-act="m-month" data-m="${T.slice(0,7)}">Now</button>`:''}<button class="btn ghost small" data-act="m-month" data-m="${next}" aria-label="Next month">›</button></div></div>`;
   if(ym===T.slice(0,7)) out+=paydayChart();
   out+=moneyCharts(mm);
   out+=`<div class="card"><div class="card-head"><span class="label">Everything that went out · ${list.length}</span><button class="btn small coral" data-act="add">+ Log a spend</button></div>
@@ -4651,7 +4660,7 @@ if(PROJ){
     clock:'<circle cx="12" cy="12" r="8.5" class="f"/><path d="M12 7.5V12l3 2"/>',
     flag:'<path class="f" d="M5.5 20.5V4.5h11l-2 4 2 4h-11"/>'
   });
-  Object.assign(NAVICON,{dash:'chart',board:'kanban',money:'wallet'});
+  Object.assign(NAVICON,{dash:'chart',board:'kanban',money:'wallet',timeline:'timeline',pcal:'calendar',projects:'clipboard',clients:'people'});
   Object.assign(MOREICON,{timeline:'timeline',matrix:'matrix',pcal:'calendar',projects:'clipboard',clients:'people'});
 }
 
@@ -4835,14 +4844,14 @@ function viewProjectP(){
 }
 function viewProjects(){
   const groups=PSTATUS.map(([k,n])=>[n,S.projects.filter(p=>(p.status||'active')===k)]);
-  return `<div><button class="back" data-go="more">← More</button></div>`+projBanner()+`<div class="top"><div><h1>Projects</h1><div class="sub">${S.projects.length} in total</div></div><button class="btn coral" data-act="pproj-new">+ Project</button></div>`+
+  return projBanner()+`<div class="top"><div><h1>Projects</h1><div class="sub">${S.projects.length} in total</div></div><button class="btn coral" data-act="pproj-new">+ Project</button></div>`+
     groups.filter(g=>g[1].length).map(([n,list])=>`<h2 style="font-size:20px">${n}</h2><div class="pcards">${list.map(p=>{const st=pStats(p), hl=pHealth(p,st); return `<button class="card pcard" data-act="pproj-open" data-id="${p.id}" style="border-top:6px solid ${p.color}">
       <span class="row-between"><b>${esc(p.name)}</b><em class="pill ${hl[1]}">${hl[0]}</em></span><span class="muted" style="font-size:13px">${esc((pClient(p.client)||{}).name||'No client')}${p.due?' · '+pDueText(p.due):''}</span>
       <span class="prog"><i style="width:${st.pct}%;background:${p.color}"></i></span><span class="row-between muted" style="font-size:13px"><span>${st.done} of ${st.total} tasks</span><span class="num">${st.owed?H(st.owed)+' owed':st.fee?H(st.fee):''}</span></span></button>`}).join('')}</div>`).join('')+
     (S.projects.length?'':`<div class="card"><p>Add your first project: a client job, a launch, anything with tasks and a deadline.</p></div>`);
 }
 function viewClients(){
-  return `<div><button class="back" data-go="more">← More</button></div>`+projBanner()+`<div class="top"><div><h1>Clients</h1><div class="sub">${S.clients.length} client${S.clients.length===1?'':'s'}</div></div><button class="btn coral" data-act="pclient-new">+ Client</button></div>
+  return projBanner()+`<div class="top"><div><h1>Clients</h1><div class="sub">${S.clients.length} client${S.clients.length===1?'':'s'}</div></div><button class="btn coral" data-act="pclient-new">+ Client</button></div>
     <div class="pcards">${S.clients.map(c=>{const ps=S.projects.filter(p=>p.client===c.id), inv=S.invoices.filter(i=>i.client===c.id), paid=inv.filter(i=>i.paid).reduce((a,i)=>a+(+i.amount||0),0), owed=inv.filter(i=>!i.paid).reduce((a,i)=>a+(+i.amount||0),0);
       return `<button class="card pcard" data-act="pclient-edit" data-id="${c.id}"><b>${esc(c.name)}</b><span class="muted" style="font-size:13px">${ps.length} project${ps.length===1?'':'s'}${c.email?' · '+esc(c.email):''}</span>
         <span class="row-between" style="font-size:14px"><span>Paid <b class="num">${H(paid)}</b></span><span>Owed <b class="num" style="color:${owed?'var(--coral)':'inherit'}">${H(owed)}</b></span></span></button>`}).join('')}</div>`+
@@ -4871,7 +4880,7 @@ function viewTimelineP(){
     return `<div class="tlrow"><button class="tln" data-act="pproj-open" data-id="${p.id}"><i class="pdot" style="background:${p.color}"></i>${esc(p.name)}</button><div class="tlt">
       ${T>=s&&T<=e?`<b class="tlnow" style="left:${pos(T)}%"></b>`:''}<div class="tlbar ${p.status==='done'?'done':''}" style="left:${pos(a)}%;width:${Math.max(1.5,pos(b)-pos(a))}%;background:${p.color}"><i style="width:${st.pct}%"></i>${pos(b)-pos(a)>=9?`<span>${st.pct}%</span>`:''}</div>
       ${ts.map(t=>`<button class="tldot" data-act="ptask-edit" data-id="${t.id}" style="left:${pos(t.due)}%;border-color:${p.color}" title="${esc(t.title)} · ${fmtShort(t.due)}"></button>`).join('')}</div></div>`}).join('');
-  return `<div><button class="back" data-go="more">← More</button></div>`+projBanner()+`<div class="top"><div><h1>Timeline</h1><div class="sub">${MONTHF[mo-1]} to ${MONTHF[(mo+1)%12]} · every project</div></div><div class="row-end"><button class="btn ghost small" data-act="ptl" data-m="${mo===1?`${y-1}-12`:`${y}-${pad(mo-1)}`}" aria-label="Earlier">‹</button><button class="btn ghost small" data-act="ptl" data-m="${T.slice(0,7)}">Now</button><button class="btn ghost small" data-act="ptl" data-m="${mo===12?`${y+1}-01`:`${y}-${pad(mo+1)}`}" aria-label="Later">›</button></div></div>
+  return projBanner()+`<div class="top"><div><h1>Timeline</h1><div class="sub">${MONTHF[mo-1]} to ${MONTHF[(mo+1)%12]} · every project</div></div><div class="row-end"><button class="btn ghost small" data-act="ptl" data-m="${mo===1?`${y-1}-12`:`${y}-${pad(mo-1)}`}" aria-label="Earlier">‹</button><button class="btn ghost small" data-act="ptl" data-m="${T.slice(0,7)}">Now</button><button class="btn ghost small" data-act="ptl" data-m="${mo===12?`${y+1}-01`:`${y}-${pad(mo+1)}`}" aria-label="Later">›</button></div></div>
     <div class="stabs-top" role="group" aria-label="Months">${tabs}</div>
     <div class="card tlwrap"><div class="tlrow tlhead"><span class="tln"></span><div class="tlt tlmonths">${months}${T>=s&&T<=e?`<b class="tltoday" style="left:${pos(T)}%">today</b>`:''}</div></div>
       ${rows||'<p class="muted">No projects in these months. Give your projects a start and due date to see them here.</p>'}
@@ -4897,7 +4906,7 @@ function viewPCal(){
   for(let d=1;d<=dim;d++){const iso=`${ym}-${pad(d)}`, l=ev[iso]||[];
     cells+=`<button class="bd ${iso===T?'today':''} ${iso<T?'past':''} ${iso===sel?'sel':''}" data-act="sel-day" data-d="${iso}"><span class="dn">${d}</span>${l.slice(0,2).map(x=>`<span class="bt ${x.k}">${esc(x.t)}</span>`).join('')}${l.length>2?`<span class="bt more">+${l.length-2}</span>`:''}<span class="bdots">${l.map(x=>`<i class="${x.k}"></i>`).join('')}</span></button>`}
   const dl=ev[sel]||[];
-  return `<div><button class="back" data-go="more">← More</button></div>`+projBanner()+`<div class="monthwrap"><div class="monthmain"><div class="top"><div><span class="eyebrow">CALENDAR</span><h1>${MONTHF[mo-1]} ${y}</h1></div><div class="row-end"><button class="btn ghost small" data-act="m-pick" data-m="${mo===1?`${y-1}-12`:`${y}-${pad(mo-1)}`}" aria-label="Previous month">‹</button><button class="btn ghost small" data-act="m-pick" data-m="${mo===12?`${y+1}-01`:`${y}-${pad(mo+1)}`}" aria-label="Next month">›</button></div></div>
+  return projBanner()+`<div class="monthwrap"><div class="monthmain"><div class="top"><div><span class="eyebrow">CALENDAR</span><h1>${MONTHF[mo-1]} ${y}</h1></div><div class="row-end"><button class="btn ghost small" data-act="m-pick" data-m="${mo===1?`${y-1}-12`:`${y}-${pad(mo-1)}`}" aria-label="Previous month">‹</button><button class="btn ghost small" data-act="m-pick" data-m="${mo===12?`${y+1}-01`:`${y}-${pad(mo+1)}`}" aria-label="Next month">›</button></div></div>
     <div class="stabs-top">${tabs}</div>
     <div class="bcal"><div class="bh">Mon</div><div class="bh">Tue</div><div class="bh">Wed</div><div class="bh">Thu</div><div class="bh">Fri</div><div class="bh">Sat</div><div class="bh">Sun</div>${cells}</div>
     <div class="legend"><span><i class="bill"></i>Task due</span><span><i class="pdue"></i>Project due</span><span><i class="in"></i>Invoice due</span><span><i class="paid"></i>Done or paid</span></div>
@@ -4906,7 +4915,7 @@ function viewPCal(){
     </div><div class="stabs-side">${tabs}</div></div>`;
 }
 function viewMoreP(){
-  const items=[['timeline','Timeline','Every project on one strip'],['matrix','Priority matrix','Do now, plan, hand off, let go'],['pcal','Calendar','Tasks, deadlines and invoices by day'],['projects','Projects','Active, paused and done'],['clients','Clients','Who you work for and what they owe'],['settings','Settings','Name, currency, look and backups']];
+  const items=[['matrix','Priority matrix','Do now, plan, hand off, let go'],['settings','Settings','Name, currency, look and backups']];
   return projBanner()+`<div class="top"><div><h1>More</h1></div></div><div class="morelist">${items.map(([k,n,d])=>`<button class="morecard" data-go="${k}"><span class="mi" aria-hidden="true">${icon(MOREICON[k]||'dots')}</span><span class="grow"><b>${n}</b><span>${d}</span></span><span class="muted" aria-hidden="true">›</span></button>`).join('')}</div>`;
 }
 
